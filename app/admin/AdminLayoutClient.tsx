@@ -7,6 +7,7 @@ import type { UserRole } from '@/lib/types'
 
 const ADMIN_TABS = [
   { href: '/admin/ofs', label: 'OFs' },
+  { href: '/admin/gammes', label: 'Gammes' },
   { href: '/admin/machines', label: 'Machines' },
   { href: '/admin/operateurs', label: 'Opérateurs' },
   { href: '/admin/clients', label: 'Clients & Priorités' },

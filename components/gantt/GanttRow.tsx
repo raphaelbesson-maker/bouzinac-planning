@@ -1,34 +1,31 @@
 'use client'
 
 import { useDroppable } from '@dnd-kit/core'
-import type { Machine, OrdreFabrication, PlanningSlot } from '@/lib/types'
+import type { Machine, OFOperation, OrdreFabrication } from '@/lib/types'
 import { GanttBlock } from './GanttBlock'
 
 interface GanttRowProps {
   machine: Machine
-  slots: PlanningSlot[]
-  date?: Date
+  operations: OFOperation[]
   pixelsPerMinute: number
   totalMinutes: number
   startHour: number
-  draggable?: boolean
-  onOpenDetail?: (of: OrdreFabrication, slot: PlanningSlot) => void
+  onOpenDetail?: (of: OrdreFabrication, op: OFOperation) => void
 }
 
 const HOUR_WIDTH = 80
 
 export function GanttRow({
   machine,
-  slots,
+  operations,
   pixelsPerMinute,
   totalMinutes,
   startHour,
-  draggable = true,
   onOpenDetail,
 }: GanttRowProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: `machine-${machine.id}`,
-    data: { machineId: machine.id },
+    data: { machineId: machine.id, machineCategorie: machine.categorie },
     disabled: machine.statut === 'Maintenance',
   })
 
@@ -42,6 +39,9 @@ export function GanttRow({
           <p className={`text-xs ${isMaintenance ? 'text-red-500' : 'text-slate-500'}`}>
             {isMaintenance ? 'Maintenance' : machine.heures_ouverture}
           </p>
+          {machine.categorie && !isMaintenance && (
+            <p className="text-xs text-slate-400 italic">{machine.categorie}</p>
+          )}
         </div>
       </div>
 
@@ -62,14 +62,13 @@ export function GanttRow({
           />
         ))}
 
-        {slots.map((slot) => (
+        {operations.map((op) => (
           <GanttBlock
-            key={slot.id}
-            slot={slot}
+            key={op.id}
+            operation={op}
             pixelsPerMinute={pixelsPerMinute}
             topOffset={4}
             startHour={startHour}
-            draggable={draggable}
             onOpenDetail={onOpenDetail}
           />
         ))}

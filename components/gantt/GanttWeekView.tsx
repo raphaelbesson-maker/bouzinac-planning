@@ -1,15 +1,14 @@
 'use client'
 
 import { useDroppable } from '@dnd-kit/core'
-import type { Machine, OrdreFabrication, PlanningSlot } from '@/lib/types'
+import type { Machine, OFOperation, OrdreFabrication } from '@/lib/types'
 
 interface GanttWeekViewProps {
   machines: Machine[]
-  slots: PlanningSlot[]
+  operations: OFOperation[]
   weekStart: Date
-  draggable?: boolean
   onDayClick: (date: Date) => void
-  onOpenDetail?: (of: OrdreFabrication, slot: PlanningSlot) => void
+  onOpenDetail?: (of: OrdreFabrication, op: OFOperation) => void
 }
 
 function getWeekDays(monday: Date): Date[] {
@@ -39,29 +38,26 @@ function minutesToLabel(minutes: number): string {
 }
 
 const PRIORITY_COLORS = {
-  Standard: 'bg-slate-200 border-slate-400 text-slate-800',
-  Urgence: 'bg-orange-200 border-orange-400 text-orange-900',
+  Standard:     'bg-slate-200 border-slate-400 text-slate-800',
+  Urgence:      'bg-orange-200 border-orange-400 text-orange-900',
   Constructeur: 'bg-indigo-200 border-indigo-400 text-indigo-900',
 }
 
 function WeekCell({
   machineId,
   date,
-  slots,
-  draggable,
+  operations,
   onOpenDetail,
 }: {
   machineId: string
   date: Date
-  slots: PlanningSlot[]
-  draggable: boolean
-  onOpenDetail?: (of: OrdreFabrication, slot: PlanningSlot) => void
+  operations: OFOperation[]
+  onOpenDetail?: (of: OrdreFabrication, op: OFOperation) => void
 }) {
   const droppableId = `week-${machineId}-${date.toISOString().split('T')[0]}`
   const { setNodeRef, isOver } = useDroppable({
     id: droppableId,
     data: { machineId, date: date.toISOString() },
-    disabled: !draggable,
   })
 
   const isToday = new Date().toDateString() === date.toDateString()
@@ -72,23 +68,22 @@ function WeekCell({
       className={[
         'border-r border-slate-200 p-1 min-h-[72px] flex flex-col gap-1 transition-colors',
         isOver ? 'bg-blue-50' : isToday ? 'bg-amber-50' : 'bg-white',
-        draggable ? '' : 'cursor-default',
       ].join(' ')}
       style={{ minWidth: 140 }}
     >
-      {slots.map((slot) => {
-        const of_ = slot.of
+      {operations.map((op) => {
+        const of_ = op.of
         if (!of_) return null
         const colorClass = PRIORITY_COLORS[of_.priorite]
         return (
           <div
-            key={slot.id}
+            key={op.id}
             className={`rounded border px-1.5 py-0.5 text-xs truncate cursor-pointer hover:opacity-80 transition-opacity ${colorClass}`}
-            title={`${of_.reference_of} — ${of_.client_nom} (${minutesToLabel(of_.temps_estime_minutes)})`}
-            onClick={() => onOpenDetail?.(of_, slot)}
+            title={`${of_.reference_of} — ${op.nom} — ${of_.client_nom} (${minutesToLabel(op.duree_minutes)})`}
+            onClick={() => onOpenDetail?.(of_, op)}
           >
             <span className="font-semibold">{of_.reference_of}</span>
-            <span className="opacity-70 ml-1">{minutesToLabel(of_.temps_estime_minutes)}</span>
+            <span className="opacity-70 ml-1">{op.nom}</span>
           </div>
         )
       })}
@@ -98,30 +93,28 @@ function WeekCell({
 
 export function GanttWeekView({
   machines,
-  slots,
+  operations,
   weekStart,
-  draggable = true,
   onDayClick,
   onOpenDetail,
 }: GanttWeekViewProps) {
   const monday = getMondayOf(weekStart)
   const days = getWeekDays(monday)
+  const today = new Date()
 
-  function getSlotsForMachineAndDate(machineId: string, date: Date): PlanningSlot[] {
-    return slots.filter((s) => {
-      if (s.machine_id !== machineId) return false
-      return new Date(s.start_time).toDateString() === date.toDateString()
+  function getOpsForMachineAndDate(machineId: string, date: Date): OFOperation[] {
+    return operations.filter((op) => {
+      if (op.machine_id !== machineId) return false
+      if (!op.start_time) return false
+      return new Date(op.start_time).toDateString() === date.toDateString()
     })
   }
-
-  const today = new Date()
 
   return (
     <div className="overflow-auto flex-1">
       <table className="border-collapse w-full min-w-max">
         <thead className="sticky top-0 z-20 bg-slate-50">
           <tr>
-            {/* Machine column header */}
             <th className="w-40 min-w-[160px] border-b-2 border-r border-slate-300 px-3 py-2 text-left">
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Machine</span>
             </th>
@@ -154,15 +147,16 @@ export function GanttWeekView({
             const isMaintenance = machine.statut === 'Maintenance'
             return (
               <tr key={machine.id} className="border-b border-slate-200">
-                {/* Machine label */}
                 <td className="w-40 border-r border-slate-200 px-3 py-2 bg-white align-top">
                   <p className="text-sm font-semibold text-slate-800">{machine.nom}</p>
                   <p className={`text-xs ${isMaintenance ? 'text-red-500' : 'text-slate-500'}`}>
                     {isMaintenance ? 'Maintenance' : machine.heures_ouverture}
                   </p>
+                  {machine.categorie && !isMaintenance && (
+                    <p className="text-xs text-slate-400 italic">{machine.categorie}</p>
+                  )}
                 </td>
                 {days.map((day) => {
-                  const daySlots = getSlotsForMachineAndDate(machine.id, day)
                   if (isMaintenance) {
                     return (
                       <td
@@ -179,8 +173,7 @@ export function GanttWeekView({
                       <WeekCell
                         machineId={machine.id}
                         date={day}
-                        slots={daySlots}
-                        draggable={draggable}
+                        operations={getOpsForMachineAndDate(machine.id, day)}
                         onOpenDetail={onOpenDetail}
                       />
                     </td>

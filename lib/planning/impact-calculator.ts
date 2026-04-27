@@ -40,6 +40,7 @@ export function calculateDownstreamShift({
       of_id: of_.id,
       reference_of: of_.reference_of,
       client_nom: of_.client_nom,
+      operation_nom: '',
       shift_minutes: shiftAccumulated,
       new_end_time: newEnd.toISOString(),
       sla_breach: slaBreach,

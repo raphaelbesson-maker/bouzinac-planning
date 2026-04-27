@@ -1,86 +1,76 @@
 'use client'
 
-import { useDraggable } from '@dnd-kit/core'
 import { CSS } from '@dnd-kit/utilities'
-import type { PlanningSlot, OFPriorite, OrdreFabrication } from '@/lib/types'
+import { useDraggable } from '@dnd-kit/core'
+import type { OFOperation, OFPriorite, OrdreFabrication } from '@/lib/types'
 import { usePlanningStore } from '@/stores/planningStore'
 
 const BLOCK_COLORS: Record<OFPriorite, string> = {
-  Standard: 'bg-slate-200 border-slate-400 text-slate-800',
-  Urgence: 'bg-orange-300 border-orange-500 text-orange-900',
+  Standard:     'bg-slate-200 border-slate-400 text-slate-800',
+  Urgence:      'bg-orange-300 border-orange-500 text-orange-900',
   Constructeur: 'bg-indigo-200 border-indigo-400 text-indigo-900',
 }
 
 interface GanttBlockProps {
-  slot: PlanningSlot
+  operation: OFOperation
   pixelsPerMinute: number
   topOffset: number
   startHour: number
-  draggable?: boolean
-  onOpenDetail?: (of: OrdreFabrication, slot: PlanningSlot) => void
+  onOpenDetail?: (of: OrdreFabrication, op: OFOperation) => void
 }
 
 export function GanttBlock({
-  slot,
+  operation,
   pixelsPerMinute,
   topOffset,
   startHour,
-  draggable = true,
   onOpenDetail,
 }: GanttBlockProps) {
   const conflicts = usePlanningStore((s) => s.conflicts)
-  const hasConflict = conflicts.some((c) => c.of_id === slot.of_id)
-  const isLocked = slot.locked
+  const hasConflict = conflicts.some((c) => c.of_id === operation.of_id)
+  const isLocked = operation.locked
+  const of_ = operation.of
 
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: slot.id,
-    data: { slot },
-    disabled: !draggable || isLocked,
+  // Operations on the Gantt are not re-draggable — unschedule via modal
+  const { setNodeRef } = useDraggable({
+    id: operation.id,
+    data: { operation },
+    disabled: true,
   })
 
-  const of_ = slot.of
   if (!of_) return null
 
-  const startDate = new Date(slot.start_time)
-  const endDate = new Date(slot.end_time)
+  const startDate = new Date(operation.start_time!)
+  const endDate = new Date(operation.end_time!)
   const durationMinutes = (endDate.getTime() - startDate.getTime()) / 60000
   const width = Math.max(durationMinutes * pixelsPerMinute, 40)
   const minutesFromStartHour = startDate.getHours() * 60 + startDate.getMinutes() - startHour * 60
 
   const style: React.CSSProperties = {
-    transform: CSS.Translate.toString(transform),
     width,
     left: Math.max(0, minutesFromStartHour * pixelsPerMinute),
     top: topOffset,
     position: 'absolute',
-    zIndex: isDragging ? 50 : 10,
-    opacity: isDragging ? 0.5 : 1,
+    zIndex: 10,
   }
 
   const colorClass = BLOCK_COLORS[of_.priorite]
 
   function handleClick(e: React.MouseEvent) {
-    // Don't open detail if user was dragging (dnd-kit sets isDragging=true)
-    if (isDragging) return
     e.stopPropagation()
-    if (of_) onOpenDetail?.(of_, slot)
+    if (of_) onOpenDetail?.(of_, operation)
   }
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      {...(draggable && !isLocked ? { ...listeners, ...attributes } : {})}
       onClick={handleClick}
       className={[
-        'rounded border-2 px-2 py-1 select-none overflow-hidden group',
+        'rounded border-2 px-2 py-1 select-none overflow-hidden group cursor-pointer hover:opacity-90',
         colorClass,
         hasConflict ? 'animate-pulse border-red-600 border-2' : '',
-        isLocked
-          ? 'cursor-pointer opacity-80'
-          : draggable
-          ? 'cursor-grab active:cursor-grabbing'
-          : 'cursor-pointer',
+        isLocked ? 'opacity-80' : '',
       ].join(' ')}
     >
       <div className="flex items-center gap-1">
@@ -91,7 +81,10 @@ export function GanttBlock({
         )}
       </div>
       {width > 80 && (
-        <span className="text-xs truncate block opacity-80">{of_.client_nom}</span>
+        <span className="text-xs truncate block opacity-80">{operation.nom}</span>
+      )}
+      {width > 120 && (
+        <span className="text-xs truncate block opacity-60">{of_.client_nom}</span>
       )}
       {hasConflict && (
         <span className="text-red-600 text-xs font-bold">⚠ Conflit</span>

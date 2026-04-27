@@ -92,7 +92,7 @@ export function ImpactModal({ open, onClose, impact, gamme, machineId, machineNa
                       <span className="text-slate-500 text-xs">{of.client_nom}</span>
                     </div>
                     <p className="text-xs text-slate-600 mt-0.5">
-                      Décalé de <strong>{of.shift_minutes} min</strong> — nouvelle fin : {formatDateTime(of.new_end_time)}
+                      Op. <strong>{of.operation_nom}</strong> — décalé de <strong>{of.shift_minutes} min</strong> — nouvelle fin : {formatDateTime(of.new_end_time)}
                     </p>
                     {of.sla_breach && (
                       <p className="text-red-600 text-xs font-semibold mt-0.5">

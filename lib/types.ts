@@ -2,6 +2,7 @@ export type MachineStatut = 'Actif' | 'Maintenance'
 export type UserRole = 'Admin' | 'ADV' | 'Atelier' | 'Client'
 export type OFPriorite = 'Standard' | 'Urgence' | 'Constructeur'
 export type OFStatut = 'A_planifier' | 'Planifie' | 'En_cours' | 'Termine'
+export type OpStatut = 'A_planifier' | 'Planifie' | 'En_cours' | 'Termine'
 export type DocumentType = 'BL' | 'Facture' | 'Autre'
 
 export interface Machine {
@@ -10,6 +11,7 @@ export interface Machine {
   statut: MachineStatut
   heures_ouverture: string
   competences_requises: string[]
+  categorie: string | null
   created_at: string
 }
 
@@ -47,12 +49,50 @@ export interface Client {
   created_at: string
 }
 
+export interface Gamme {
+  id: string
+  nom: string
+  description: string | null
+  created_at: string
+  gamme_operations?: GammeOperation[]
+}
+
+export interface GammeOperation {
+  id: string
+  gamme_id: string
+  ordre: number
+  nom: string
+  categorie_machine: string
+  duree_minutes: number
+}
+
+export interface OFOperation {
+  id: string
+  of_id: string
+  gamme_operation_id: string | null
+  ordre: number
+  nom: string
+  categorie_machine: string
+  duree_minutes: number
+  machine_id: string | null
+  statut: OpStatut
+  start_time: string | null
+  end_time: string | null
+  locked: boolean
+  created_at: string
+  updated_at: string
+  // Joined
+  of?: OrdreFabrication
+  machine?: Machine
+}
+
 export interface OrdreFabrication {
   id: string
   client_id: string | null
   client_nom: string
   reference_of: string
   gamme: string | null
+  gamme_id: string | null
   sla_date: string
   priorite: OFPriorite
   temps_estime_minutes: number
@@ -63,8 +103,11 @@ export interface OrdreFabrication {
   notes: string | null
   created_at: string
   updated_at: string
+  // Joined
+  of_operations?: OFOperation[]
 }
 
+/** @deprecated — use OFOperation. Kept for backward compat with simulateur. */
 export interface PlanningSlot {
   id: string
   of_id: string
@@ -74,7 +117,6 @@ export interface PlanningSlot {
   locked: boolean
   created_at: string
   updated_at: string
-  // Joined fields
   of?: OrdreFabrication
 }
 
@@ -87,7 +129,7 @@ export interface Reglement {
 }
 
 export interface Conflict {
-  type: 'overlap' | 'sla_breach' | 'competence_mismatch' | 'buffer_violation'
+  type: 'overlap' | 'sla_breach' | 'competence_mismatch' | 'buffer_violation' | 'sequential'
   of_id: string
   reference_of: string
   message: string
@@ -97,6 +139,7 @@ export interface AffectedOF {
   of_id: string
   reference_of: string
   client_nom: string
+  operation_nom: string
   shift_minutes: number
   new_end_time: string
   sla_breach: boolean

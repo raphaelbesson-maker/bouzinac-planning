@@ -29,7 +29,7 @@ export function SimulateurClient({ machines, userName, role }: SimulateurClientP
   usePlanning(dateRange)
   useRealtimePlanning(dateRange)
 
-  const slots = usePlanningStore((s) => s.slots)
+  const operations = usePlanningStore((s) => s.operations)
 
   return (
     <AppShell role={role} userName={userName}>
@@ -37,10 +37,9 @@ export function SimulateurClient({ machines, userName, role }: SimulateurClientP
         <div className="flex-1 overflow-hidden">
           <GanttBoard
             machines={machines}
-            slots={slots}
+            operations={operations}
             currentDate={currentDate}
             onDateChange={setCurrentDate}
-            draggable={false}
           />
         </div>
         <UrgencePanel machines={machines} />

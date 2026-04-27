@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import type { Machine, OrdreFabrication, PlanningSlot } from '@/lib/types'
+import type { Machine, OFOperation, OrdreFabrication } from '@/lib/types'
 import { GanttRow } from './GanttRow'
 import { GanttHeader } from './GanttHeader'
 import { GanttLegend } from './GanttLegend'
@@ -15,29 +15,27 @@ const PIXELS_PER_MINUTE = 80 / 60
 
 interface GanttBoardProps {
   machines: Machine[]
-  slots: PlanningSlot[]
+  operations: OFOperation[]
   currentDate: Date
   onDateChange: (date: Date) => void
-  draggable?: boolean
-  onOpenDetail?: (of: OrdreFabrication, slot: PlanningSlot) => void
+  onOpenDetail?: (of: OrdreFabrication, op: OFOperation) => void
 }
 
 export function GanttBoard({
   machines,
-  slots,
+  operations,
   currentDate,
   onDateChange,
-  draggable = true,
   onOpenDetail,
 }: GanttBoardProps) {
   const [viewType, setViewType] = useState<ViewType>('day')
 
   const totalMinutes = (END_HOUR - START_HOUR) * 60
 
-  function getSlotsForMachine(machineId: string): PlanningSlot[] {
-    return slots.filter((s) => {
-      if (s.machine_id !== machineId) return false
-      return new Date(s.start_time).toDateString() === currentDate.toDateString()
+  function getOpsForMachine(machineId: string): OFOperation[] {
+    return operations.filter((op) => {
+      if (op.machine_id !== machineId) return false
+      return new Date(op.start_time!).toDateString() === currentDate.toDateString()
     })
   }
 
@@ -69,12 +67,10 @@ export function GanttBoard({
               <GanttRow
                 key={machine.id}
                 machine={machine}
-                slots={getSlotsForMachine(machine.id)}
-                date={currentDate}
+                operations={getOpsForMachine(machine.id)}
                 pixelsPerMinute={PIXELS_PER_MINUTE}
                 totalMinutes={totalMinutes}
                 startHour={START_HOUR}
-                draggable={draggable}
                 onOpenDetail={onOpenDetail}
               />
             ))}
@@ -85,9 +81,8 @@ export function GanttBoard({
       {viewType === 'week' && (
         <GanttWeekView
           machines={machines}
-          slots={slots}
+          operations={operations}
           weekStart={currentDate}
-          draggable={draggable}
           onDayClick={handleDayClick}
           onOpenDetail={onOpenDetail}
         />
@@ -96,7 +91,7 @@ export function GanttBoard({
       {viewType === 'month' && (
         <GanttMonthView
           machines={machines}
-          slots={slots}
+          operations={operations}
           currentDate={currentDate}
           onDayClick={handleDayClick}
         />

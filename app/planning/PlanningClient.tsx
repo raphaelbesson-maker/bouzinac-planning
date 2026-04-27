@@ -20,9 +20,11 @@ import { OFDetailModal } from '@/components/gantt/OFDetailModal'
 import { usePlanning } from '@/hooks/usePlanning'
 import { useRealtimePlanning } from '@/lib/realtime/useRealtimePlanning'
 import { usePlanningStore } from '@/stores/planningStore'
-import type { Machine, OrdreFabrication, PlanningSlot, UserRole } from '@/lib/types'
+import { getNextOperation } from '@/components/sidebar/SidebarOFCard'
+import type { Machine, OFOperation, OrdreFabrication, UserRole } from '@/lib/types'
 
 const START_HOUR = 6
+const BUFFER_MINUTES = 15
 
 interface PlanningClientProps {
   machines: Machine[]
@@ -34,7 +36,7 @@ export function PlanningClient({ machines, userName, role }: PlanningClientProps
   const [currentDate, setCurrentDate] = useState(new Date())
   const [activeOf, setActiveOf] = useState<OrdreFabrication | null>(null)
   const [detailOf, setDetailOf] = useState<OrdreFabrication | null>(null)
-  const [detailSlot, setDetailSlot] = useState<PlanningSlot | null>(null)
+  const [detailOp, setDetailOp] = useState<OFOperation | null>(null)
 
   const dateRange = useMemo(() => {
     const start = new Date()
@@ -47,23 +49,16 @@ export function PlanningClient({ machines, userName, role }: PlanningClientProps
   usePlanning(dateRange)
   useRealtimePlanning(dateRange)
 
-  const { slots, unscheduledOFs, moveSlot, rollback, setConflicts } = usePlanningStore()
+  const { operations, unscheduledOFs, scheduleOperation, rollback, setConflicts } = usePlanningStore()
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } })
   )
 
-  function getSlotsForMachineAndDate(machineId: string, date: Date): PlanningSlot[] {
-    return slots.filter((s) => {
-      if (s.machine_id !== machineId) return false
-      return new Date(s.start_time).toDateString() === date.toDateString()
-    })
-  }
-
-  function openDetail(of_: OrdreFabrication, slot?: PlanningSlot) {
+  function openDetail(of_: OrdreFabrication, op?: OFOperation) {
     setDetailOf(of_)
-    setDetailSlot(slot ?? null)
+    setDetailOp(op ?? null)
   }
 
   function handleDragStart(event: DragStartEvent) {
@@ -76,65 +71,95 @@ export function PlanningClient({ machines, userName, role }: PlanningClientProps
     const { active, over } = event
     if (!over) return
 
-    const overData = over.data.current as { machineId: string; date?: string } | undefined
+    const overData = over.data.current as { machineId: string; machineCategorie?: string; date?: string } | undefined
     const droppedOnMachineId = overData?.machineId
     if (!droppedOnMachineId) return
 
+    const of_ = active.data.current?.of as OrdreFabrication | undefined
+    if (!of_) return
+
+    // Find the next unscheduled operation
+    const nextOp = getNextOperation(of_)
+    if (!nextOp) {
+      toast.error('Toutes les opérations de cet OF sont déjà planifiées.')
+      return
+    }
+
+    // Check machine categorie compatibility
+    const targetMachine = machines.find((m) => m.id === droppedOnMachineId)
+    if (targetMachine?.categorie && targetMachine.categorie !== nextOp.categorie_machine) {
+      toast.error(
+        `Cette machine (${targetMachine.nom}) fait du "${targetMachine.categorie}", mais la prochaine opération requiert "${nextOp.categorie_machine}".`
+      )
+      return
+    }
+
+    // Compute start time
     const targetDate = overData?.date ? new Date(overData.date) : new Date(currentDate)
     targetDate.setHours(0, 0, 0, 0)
-
-    const draggedSlot = active.data.current?.slot as PlanningSlot | undefined
-    const draggedOfId = draggedSlot?.of_id ?? (active.id as string)
-    const of_ = draggedSlot?.of ?? unscheduledOFs.find((o) => o.id === draggedOfId)
-    if (!of_) return
 
     const startTime = new Date(targetDate)
     startTime.setHours(START_HOUR, 0, 0, 0)
 
-    const machineSlots = getSlotsForMachineAndDate(droppedOnMachineId, targetDate).sort(
-      (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
-    )
-    if (machineSlots.length > 0) {
-      const lastEnd = new Date(machineSlots[machineSlots.length - 1].end_time)
-      startTime.setTime(lastEnd.getTime() + 15 * 60000)
+    // Push after last op on this machine that day
+    const machineOpsToday = operations
+      .filter((op) => {
+        if (op.machine_id !== droppedOnMachineId) return false
+        if (!op.start_time) return false
+        return new Date(op.start_time).toDateString() === targetDate.toDateString()
+      })
+      .sort((a, b) => new Date(a.start_time!).getTime() - new Date(b.start_time!).getTime())
+
+    if (machineOpsToday.length > 0) {
+      const lastEnd = new Date(machineOpsToday[machineOpsToday.length - 1].end_time!)
+      const candidateStart = new Date(lastEnd.getTime() + BUFFER_MINUTES * 60000)
+      if (candidateStart > startTime) startTime.setTime(candidateStart.getTime())
     }
 
-    const endTime = new Date(startTime.getTime() + of_.temps_estime_minutes * 60000)
+    // Sequential constraint: start must be >= previous operation's end_time
+    const prevOp = (of_.of_operations ?? [])
+      .filter((op) => op.ordre < nextOp.ordre && op.statut !== 'A_planifier')
+      .sort((a, b) => b.ordre - a.ordre)[0]
 
-    const optimisticSlot: PlanningSlot = {
-      id: `optimistic-${Date.now()}`,
-      of_id: of_.id,
+    if (prevOp?.end_time) {
+      const prevEnd = new Date(new Date(prevOp.end_time).getTime() + BUFFER_MINUTES * 60000)
+      if (prevEnd > startTime) startTime.setTime(prevEnd.getTime())
+    }
+
+    const endTime = new Date(startTime.getTime() + nextOp.duree_minutes * 60000)
+
+    // Optimistic update
+    const optimisticOp: OFOperation = {
+      ...nextOp,
       machine_id: droppedOnMachineId,
       start_time: startTime.toISOString(),
       end_time: endTime.toISOString(),
-      locked: false,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      statut: 'Planifie',
       of: of_,
+      machine: targetMachine,
     }
 
-    const previousSlots = usePlanningStore.getState().slots
+    const previousOps = usePlanningStore.getState().operations
     const previousUnscheduled = usePlanningStore.getState().unscheduledOFs
 
-    moveSlot(optimisticSlot, draggedSlot?.of_id)
+    scheduleOperation(optimisticOp)
 
     try {
       const res = await fetch('/api/planning/move', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          of_id: of_.id,
+          operation_id: nextOp.id,
           machine_id: droppedOnMachineId,
           start_time: startTime.toISOString(),
           end_time: endTime.toISOString(),
-          previous_slot_id: draggedSlot?.id,
         }),
       })
 
       if (!res.ok) {
         const data = await res.json()
-        rollback(previousSlots, previousUnscheduled)
-        toast.error(data.error ?? 'Impossible de planifier cet OF.')
+        rollback(previousOps, previousUnscheduled)
+        toast.error(data.error ?? 'Impossible de planifier cette opération.')
         return
       }
 
@@ -144,11 +169,11 @@ export function PlanningClient({ machines, userName, role }: PlanningClientProps
         toast.warning(`Conflit détecté sur ${of_.reference_of}. Vérifiez le planning.`)
       } else {
         setConflicts([])
-        toast.success(`OF ${of_.reference_of} planifié avec succès.`)
+        toast.success(`${of_.reference_of} — ${nextOp.nom} planifié sur ${targetMachine?.nom ?? 'la machine'}.`)
       }
     } catch {
-      rollback(previousSlots, previousUnscheduled)
-      toast.error("Erreur réseau. L'OF n'a pas été planifié.")
+      rollback(previousOps, previousUnscheduled)
+      toast.error("Erreur réseau. L'opération n'a pas été planifiée.")
     }
   }
 
@@ -164,10 +189,9 @@ export function PlanningClient({ machines, userName, role }: PlanningClientProps
           <div className="flex-1 overflow-hidden">
             <GanttBoard
               machines={machines}
-              slots={slots}
+              operations={operations}
               currentDate={currentDate}
               onDateChange={setCurrentDate}
-              draggable={true}
               onOpenDetail={openDetail}
             />
           </div>
@@ -180,9 +204,9 @@ export function PlanningClient({ machines, userName, role }: PlanningClientProps
 
       <OFDetailModal
         of={detailOf}
-        slot={detailSlot}
+        operation={detailOp}
         open={detailOf !== null}
-        onClose={() => { setDetailOf(null); setDetailSlot(null) }}
+        onClose={() => { setDetailOf(null); setDetailOp(null) }}
       />
     </AppShell>
   )

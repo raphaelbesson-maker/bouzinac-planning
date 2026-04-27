@@ -3,14 +3,14 @@
 import { useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { usePlanningStore } from '@/stores/planningStore'
-import type { PlanningSlot } from '@/lib/types'
+import type { OFOperation } from '@/lib/types'
 
 export function useRealtimePlanning(dateRange: { start: string; end: string }) {
-  const { upsertSlot, removeSlot } = usePlanningStore()
+  const { upsertOperation, removeOperation } = usePlanningStore()
 
   useEffect(() => {
     const supabase = createClient()
-    const channelName = `planning-${dateRange.start}-${dateRange.end}`
+    const channelName = `planning-ops-${dateRange.start}-${dateRange.end}`
 
     const channel = supabase
       .channel(channelName)
@@ -19,14 +19,13 @@ export function useRealtimePlanning(dateRange: { start: string; end: string }) {
         {
           event: '*',
           schema: 'public',
-          table: 'planning_slots',
-          filter: `start_time=gte.${dateRange.start}`,
+          table: 'of_operations',
         },
         (payload) => {
           if (payload.eventType === 'DELETE') {
-            removeSlot(payload.old.id as string)
+            removeOperation(payload.old.id as string)
           } else {
-            upsertSlot(payload.new as PlanningSlot)
+            upsertOperation(payload.new as OFOperation)
           }
         }
       )
@@ -35,5 +34,5 @@ export function useRealtimePlanning(dateRange: { start: string; end: string }) {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [dateRange.start, dateRange.end, upsertSlot, removeSlot])
+  }, [dateRange.start, dateRange.end, upsertOperation, removeOperation])
 }

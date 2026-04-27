@@ -1,7 +1,7 @@
 'use client'
 
 import { useDraggable } from '@dnd-kit/core'
-import type { OrdreFabrication } from '@/lib/types'
+import type { OFOperation, OrdreFabrication } from '@/lib/types'
 import { PrioriteBadge } from '@/components/shared/StatusBadge'
 
 interface SidebarOFCardProps {
@@ -16,9 +16,17 @@ function daysUntil(dateStr: string): number {
   return Math.ceil((target.getTime() - now.getTime()) / 86400000)
 }
 
+export function getNextOperation(of: OrdreFabrication): OFOperation | undefined {
+  const ops = of.of_operations ?? []
+  return ops
+    .filter((op) => op.statut === 'A_planifier')
+    .sort((a, b) => a.ordre - b.ordre)[0]
+}
+
 export function OFCardContent({ of }: { of: OrdreFabrication }) {
   const days = daysUntil(of.sla_date)
   const slaUrgent = days <= 2
+  const nextOp = getNextOperation(of)
 
   return (
     <>
@@ -26,12 +34,20 @@ export function OFCardContent({ of }: { of: OrdreFabrication }) {
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-sm text-slate-900 truncate">{of.reference_of}</p>
           <p className="text-xs text-slate-600 truncate">{of.client_nom}</p>
-          {of.gamme && <p className="text-xs text-slate-500 truncate italic">{of.gamme}</p>}
         </div>
         <PrioriteBadge priorite={of.priorite} />
       </div>
-      <div className="mt-2 flex items-center justify-between text-xs">
-        <span className="text-slate-500">{of.temps_estime_minutes} min</span>
+      {nextOp && (
+        <div className="mt-1.5 flex items-center gap-1 text-xs text-slate-500">
+          <span className="font-medium text-slate-700">→ {nextOp.nom}</span>
+          <span className="text-slate-400">({nextOp.duree_minutes} min)</span>
+        </div>
+      )}
+      <div className="mt-1.5 flex items-center justify-between text-xs">
+        <span className="text-slate-400">
+          {(of.of_operations ?? []).filter((o) => o.statut !== 'A_planifier').length}
+          /{(of.of_operations ?? []).length} étapes
+        </span>
         <span className={`font-medium ${slaUrgent ? 'text-red-600' : 'text-slate-600'}`}>
           SLA : {slaUrgent && '⚠ '}
           {days <= 0 ? 'DÉPASSÉ' : days === 1 ? 'Demain' : `J-${days}`}
@@ -72,13 +88,12 @@ export function SidebarOFCard({ of, onOpenDetail }: SidebarOFCardProps) {
     >
       <OFCardContent of={of} />
       <p className="text-xs text-slate-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        Cliquer pour détails · Glisser pour planifier
+        Glisser sur une machine pour planifier
       </p>
     </div>
   )
 }
 
-// Rendered inside DragOverlay (portal at body level)
 export function SidebarOFCardOverlay({ of }: { of: OrdreFabrication }) {
   return (
     <div className={[cardClass(of), 'shadow-2xl cursor-grabbing ring-2 ring-slate-400 w-60'].join(' ')}>
