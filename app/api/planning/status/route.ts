@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { sendOrderNotification } from '@/lib/email'
 
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
@@ -71,7 +72,7 @@ export async function POST(req: NextRequest) {
 
     if (portalUsers && portalUsers.length > 0) {
       for (const pu of portalUsers) {
-        const { data: authUser } = await supabase.auth.admin.getUserById(pu.id)
+        const { data: authUser } = await createAdminClient().auth.admin.getUserById(pu.id)
         const email = authUser?.user?.email
         if (email) {
           const notifType = statut === 'Termine' ? 'expedition' : 'statut_change'

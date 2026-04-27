@@ -1,7 +1,5 @@
-import { Resend } from 'resend'
 import type { OrdreFabrication } from '@/lib/types'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? 'commandes@bouzinac.fr'
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
 
@@ -114,6 +112,8 @@ export async function sendOrderNotification({
     return { success: false, error: 'RESEND_API_KEY not configured' }
   }
 
+  const { Resend } = await import('resend')
+  const resend = new Resend(process.env.RESEND_API_KEY)
   const { subject, html } = getEmailContent(order, type)
 
   try {
