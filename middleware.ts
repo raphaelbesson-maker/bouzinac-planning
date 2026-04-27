@@ -45,8 +45,10 @@ export async function middleware(request: NextRequest) {
 
   if (pathname.startsWith('/login')) {
     if (user) {
-      // Clear role cache on fresh login
-      const res = NextResponse.redirect(new URL('/planning', request.url))
+      // Redirect to the right module based on cached role
+      const cachedRole = request.cookies.get(ROLE_COOKIE)?.value
+      const home = cachedRole === 'ADV' ? '/adv' : cachedRole === 'Client' ? '/portail' : '/planning'
+      const res = NextResponse.redirect(new URL(home, request.url))
       res.cookies.delete(ROLE_COOKIE)
       return res
     }
@@ -54,7 +56,6 @@ export async function middleware(request: NextRequest) {
   }
 
   if (!user) {
-    // Clear stale role cache on logout
     const res = NextResponse.redirect(new URL('/login', request.url))
     res.cookies.delete(ROLE_COOKIE)
     return res
@@ -70,7 +71,16 @@ export async function middleware(request: NextRequest) {
       .eq('id', user.id)
       .single()
     role = operateur?.role ?? ''
-    supabaseResponse.cookies.set(ROLE_COOKIE, role as string, {
+
+    // User authenticated but not provisioned in operateurs — sign out to avoid redirect loop
+    if (!role) {
+      await supabase.auth.signOut()
+      const res = NextResponse.redirect(new URL('/login', request.url))
+      res.cookies.delete(ROLE_COOKIE)
+      return res
+    }
+
+    supabaseResponse.cookies.set(ROLE_COOKIE, role, {
       httpOnly: true,
       sameSite: 'lax',
       maxAge: ROLE_COOKIE_MAX_AGE,
@@ -78,14 +88,17 @@ export async function middleware(request: NextRequest) {
     })
   }
 
+  // Redirect to the appropriate home module if accessing a forbidden route
+  const HOME: Record<string, string> = { Admin: '/planning', Atelier: '/planning', ADV: '/adv', Client: '/portail' }
+  const home = HOME[role] ?? '/login'
+
   for (const [route, allowedRoles] of Object.entries(ROLE_ROUTES)) {
-    if (pathname.startsWith(route) && !allowedRoles.includes(role ?? '')) {
-      const fallback = role === 'ADV' ? '/adv' : role === 'Client' ? '/portail' : '/planning'
-      return NextResponse.redirect(new URL(fallback, request.url))
+    if (pathname.startsWith(route) && !allowedRoles.includes(role)) {
+      return NextResponse.redirect(new URL(home, request.url))
     }
   }
 
-  supabaseResponse.headers.set('x-user-role', role ?? '')
+  supabaseResponse.headers.set('x-user-role', role)
   return supabaseResponse
 }
 
