@@ -1,0 +1,4 @@
+-- Seed SQL intentionally left empty.
+-- Demo business data lives in the migration files.
+-- Local test users are created via `npm run setup:test-users` so they are
+-- provisioned through Supabase Auth instead of raw SQL inserts.
