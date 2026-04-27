@@ -13,6 +13,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
   Admin: 'Direction',
   ADV: 'Commerce',
   Atelier: 'Atelier',
+  Client: 'Client',
 }
 
 interface OperateursClientProps {

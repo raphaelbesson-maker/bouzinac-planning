@@ -2,9 +2,11 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 const ROLE_ROUTES: Record<string, string[]> = {
-  '/planning': ['Admin', 'Atelier'],
-  '/simulateur': ['Admin', 'ADV'],
-  '/admin': ['Admin'],
+  '/planning':  ['Admin', 'Atelier'],
+  '/simulateur':['Admin', 'ADV'],
+  '/adv':       ['Admin', 'ADV'],
+  '/portail':   ['Admin', 'ADV', 'Client'],
+  '/admin':     ['Admin'],
 }
 
 // Role is cached in a short-lived cookie so we skip the DB query on every request.
@@ -78,7 +80,7 @@ export async function middleware(request: NextRequest) {
 
   for (const [route, allowedRoles] of Object.entries(ROLE_ROUTES)) {
     if (pathname.startsWith(route) && !allowedRoles.includes(role ?? '')) {
-      const fallback = role === 'ADV' ? '/simulateur' : '/planning'
+      const fallback = role === 'ADV' ? '/adv' : role === 'Client' ? '/portail' : '/planning'
       return NextResponse.redirect(new URL(fallback, request.url))
     }
   }

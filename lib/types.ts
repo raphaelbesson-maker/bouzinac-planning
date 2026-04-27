@@ -1,7 +1,8 @@
 export type MachineStatut = 'Actif' | 'Maintenance'
-export type UserRole = 'Admin' | 'ADV' | 'Atelier'
+export type UserRole = 'Admin' | 'ADV' | 'Atelier' | 'Client'
 export type OFPriorite = 'Standard' | 'Urgence' | 'Constructeur'
 export type OFStatut = 'A_planifier' | 'Planifie' | 'En_cours' | 'Termine'
+export type DocumentType = 'BL' | 'Facture' | 'Autre'
 
 export interface Machine {
   id: string
@@ -17,7 +18,25 @@ export interface Operateur {
   nom: string
   role: UserRole
   competences: string[]
+  client_id: string | null
   created_at: string
+}
+
+export interface Document {
+  id: string
+  of_id: string
+  type: DocumentType
+  nom_fichier: string
+  storage_path: string | null
+  created_at: string
+}
+
+export interface NotificationLog {
+  id: string
+  of_id: string
+  type: string
+  recipient_email: string
+  sent_at: string
 }
 
 export interface Client {

@@ -10,12 +10,14 @@ const ROLE_LABELS: Record<UserRole, string> = {
   Admin: 'Direction',
   ADV: 'Commerce',
   Atelier: 'Atelier',
+  Client: 'Client',
 }
 
 const ROLE_COLORS: Record<UserRole, string> = {
   Admin: 'bg-purple-100 text-purple-800',
   ADV: 'bg-blue-100 text-blue-800',
   Atelier: 'bg-green-100 text-green-800',
+  Client: 'bg-teal-100 text-teal-800',
 }
 
 interface NavItem {
@@ -25,9 +27,11 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { href: '/planning', label: 'Planning Atelier', roles: ['Admin', 'Atelier'] },
-  { href: '/simulateur', label: 'Simulateur SAV', roles: ['Admin', 'ADV'] },
-  { href: '/admin', label: 'Administration', roles: ['Admin'] },
+  { href: '/adv',        label: 'Espace ADV',       roles: ['Admin', 'ADV'] },
+  { href: '/portail',    label: 'Mon espace',        roles: ['Client'] },
+  { href: '/planning',   label: 'Planning Atelier',  roles: ['Admin', 'Atelier'] },
+  { href: '/simulateur', label: 'Simulateur SAV',    roles: ['Admin'] },
+  { href: '/admin',      label: 'Administration',    roles: ['Admin'] },
 ]
 
 interface AppShellProps {
