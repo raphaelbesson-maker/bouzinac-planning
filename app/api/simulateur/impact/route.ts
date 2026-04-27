@@ -48,7 +48,6 @@ export async function POST(req: NextRequest) {
   for (const op of machineOps ?? []) {
     const opStart = new Date(op.start_time!)
     const opEnd = new Date(op.end_time!)
-    const duration = opEnd.getTime() - opStart.getTime()
 
     if (opStart >= urgenceStart) {
       // This op gets pushed by urgence + buffer

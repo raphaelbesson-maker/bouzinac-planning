@@ -49,7 +49,7 @@ export function PlanningClient({ machines, userName, role }: PlanningClientProps
   usePlanning(dateRange)
   useRealtimePlanning(dateRange)
 
-  const { operations, unscheduledOFs, scheduleOperation, rollback, setConflicts } = usePlanningStore()
+  const { operations, scheduleOperation, rollback, setConflicts } = usePlanningStore()
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),

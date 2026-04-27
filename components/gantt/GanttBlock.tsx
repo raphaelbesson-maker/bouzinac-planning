@@ -1,6 +1,5 @@
 'use client'
 
-import { CSS } from '@dnd-kit/utilities'
 import { useDraggable } from '@dnd-kit/core'
 import type { OFOperation, OFPriorite, OrdreFabrication } from '@/lib/types'
 import { usePlanningStore } from '@/stores/planningStore'
