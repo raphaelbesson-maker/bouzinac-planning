@@ -12,6 +12,7 @@ const ADMIN_TABS = [
   { href: '/admin/clients', label: 'Clients & Priorités' },
   { href: '/admin/regles', label: 'Règles' },
   { href: '/admin/import', label: 'Import CSV/Excel' },
+  { href: '/admin/utilisateurs', label: 'Utilisateurs' },
 ]
 
 interface AdminLayoutClientProps {
