@@ -49,7 +49,7 @@ export function SidebarOF({ onOpenDetail }: SidebarOFProps) {
     else if (filter === 'sla_critique') ofs = ofs.filter((of) => daysUntil(of.sla_date) <= alertDays)
 
     return ofs
-  }, [unscheduledOFs, search, filter])
+  }, [unscheduledOFs, search, filter, alertDays])
 
   const FILTERS: { key: QuickFilter; label: string; activeClass: string }[] = [
     { key: 'all', label: 'Tous', activeClass: 'bg-slate-900 text-white' },

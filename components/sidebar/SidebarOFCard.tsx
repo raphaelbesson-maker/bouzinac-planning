@@ -1,7 +1,7 @@
 'use client'
 
 import { useDraggable } from '@dnd-kit/core'
-import type { OFOperation, OrdreFabrication } from '@/lib/types'
+import type { OrdreFabrication } from '@/lib/types'
 import { PrioriteBadge } from '@/components/shared/StatusBadge'
 import { getNextOperation } from '@/lib/planning/of-utils'
 

@@ -35,10 +35,10 @@ export function GanttBlock({
     operation.end_time != null &&
     new Date() > new Date(operation.end_time)
 
-  const { setNodeRef } = useDraggable({
-    id: operation.id,
-    data: { operation },
-    disabled: true,
+  const { setNodeRef, isDragging, attributes, listeners } = useDraggable({
+    id: `gantt-${operation.id}`,
+    data: { operation, of: of_, type: 'gantt-block' },
+    disabled: isLocked,
   })
 
   if (!of_) return null
@@ -69,12 +69,14 @@ export function GanttBlock({
       ref={setNodeRef}
       style={style}
       onClick={handleClick}
+      {...(isLocked ? {} : { ...listeners, ...attributes })}
       className={[
-        'rounded border-2 px-2 py-1 select-none overflow-hidden group cursor-pointer hover:opacity-90',
+        'rounded border-2 px-2 py-1 select-none overflow-hidden group',
         colorClass,
         hasConflict ? 'animate-pulse border-red-600 border-2' : '',
         isLate && !hasConflict ? 'border-orange-500 border-2' : '',
-        isLocked ? 'opacity-80' : '',
+        isLocked ? 'opacity-80 cursor-pointer' : 'cursor-grab active:cursor-grabbing',
+        isDragging ? 'opacity-30' : 'hover:opacity-90',
       ].join(' ')}
     >
       <div className="flex items-center gap-1">
@@ -106,6 +108,23 @@ export function GanttBlock({
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+export function GanttBlockOverlay({ operation }: { operation: OFOperation }) {
+  const of_ = operation.of
+  if (!of_) return null
+  return (
+    <div className={[
+      'rounded border-2 px-2 py-1 select-none w-48 shadow-2xl ring-2 ring-slate-400 cursor-grabbing',
+      BLOCK_COLORS[of_.priorite],
+    ].join(' ')}>
+      <div className="flex items-center gap-1">
+        <span className="font-semibold text-xs truncate">{of_.reference_of}</span>
+      </div>
+      <span className="text-xs truncate block opacity-80">{operation.nom}</span>
+      <span className="text-xs truncate block opacity-60">{of_.client_nom}</span>
     </div>
   )
 }

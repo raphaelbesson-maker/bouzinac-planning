@@ -32,11 +32,17 @@ export function GanttRow({
   })
 
   const { active } = useDndContext()
-  const draggedOf = active?.data.current?.of as OrdreFabrication | undefined
   const isDragging = !!active
 
   const isMaintenance = machine.statut === 'Maintenance'
-  const draggingCategorie = draggedOf ? (getNextOperation(draggedOf)?.categorie_machine ?? null) : null
+
+  // Support both sidebar cards (data.of) and gantt block moves (data.operation)
+  const draggedOf = active?.data.current?.of as OrdreFabrication | undefined
+  const draggedOp = active?.data.current?.operation as OFOperation | undefined
+  const isGanttBlock = active?.data.current?.type === 'gantt-block'
+  const draggingCategorie = isGanttBlock
+    ? (draggedOp?.categorie_machine ?? null)
+    : (draggedOf ? (getNextOperation(draggedOf)?.categorie_machine ?? null) : null)
   const categoryMatch = !draggingCategorie || draggingCategorie === machine.categorie
   const canReceive = !isMaintenance && categoryMatch
 

@@ -49,15 +49,59 @@ function formatDateTime(iso: string) {
   return new Date(iso).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
+function toLocalDatetimeValue(iso: string): string {
+  const d = new Date(iso)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 export function OFDetailModal({ of: of_, operation, open, onClose }: OFDetailModalProps) {
   const [loading, setLoading] = useState(false)
-  const { removeOperation, setUnscheduledOFs, unscheduledOFs } = usePlanningStore()
+  const [rescheduleStart, setRescheduleStart] = useState<string>('')
+  const { removeOperation, setUnscheduledOFs, unscheduledOFs, upsertOperation } = usePlanningStore()
 
   if (!of_) return null
 
   const days = daysUntil(of_.sla_date)
   const slaUrgent = days <= 2
   const allOps = of_.of_operations ?? []
+
+  // Initialize reschedule input when operation changes
+  function getDefaultStart() {
+    return operation?.start_time ? toLocalDatetimeValue(operation.start_time) : ''
+  }
+  const startValue = rescheduleStart || getDefaultStart()
+
+  async function handleReschedule() {
+    if (!operation || !startValue) return
+    const newStart = new Date(startValue)
+    const durationMs = new Date(operation.end_time!).getTime() - new Date(operation.start_time!).getTime()
+    const newEnd = new Date(newStart.getTime() + durationMs)
+
+    setLoading(true)
+    try {
+      const res = await fetch('/api/planning/move', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          operation_id: operation.id,
+          machine_id: operation.machine_id,
+          start_time: newStart.toISOString(),
+          end_time: newEnd.toISOString(),
+        }),
+      })
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error) }
+      const data = await res.json()
+      upsertOperation(data.operation)
+      toast.success(`${operation.nom} reprogrammé au ${formatDateTime(newStart.toISOString())}`)
+      setRescheduleStart('')
+      onClose()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Impossible de reprogrammer cette opération')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   async function handleUnschedule() {
     if (!operation) return
@@ -70,7 +114,6 @@ export function OFDetailModal({ of: of_, operation, open, onClose }: OFDetailMod
       })
       if (!res.ok) { const d = await res.json(); throw new Error(d.error) }
       removeOperation(operation.id)
-      // Re-add OF to sidebar if not already there
       if (!unscheduledOFs.find((o) => o.id === of_!.id)) {
         setUnscheduledOFs([{ ...of_!, statut: 'A_planifier' }, ...unscheduledOFs])
       }
@@ -120,7 +163,7 @@ export function OFDetailModal({ of: of_, operation, open, onClose }: OFDetailMod
   }
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) { setRescheduleStart(''); onClose() } }}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="text-lg font-bold text-slate-900">
@@ -214,6 +257,30 @@ export function OFDetailModal({ of: of_, operation, open, onClose }: OFDetailMod
 
             {operation.statut === 'Planifie' && (
               <>
+                {/* Manual reschedule */}
+                <div className="border rounded-lg p-3 bg-slate-50 space-y-2">
+                  <p className="text-xs font-medium text-slate-600">Reprogrammer à une heure précise</p>
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="datetime-local"
+                      value={startValue}
+                      onChange={(e) => setRescheduleStart(e.target.value)}
+                      className="flex-1 h-9 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={loading || !startValue}
+                      onClick={handleReschedule}
+                    >
+                      Valider
+                    </Button>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Durée conservée : {operation.duree_minutes} min
+                  </p>
+                </div>
+
                 <Button
                   variant="outline"
                   className="w-full justify-start"
