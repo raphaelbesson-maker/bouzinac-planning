@@ -10,10 +10,13 @@ interface ImpactModalProps {
   open: boolean
   onClose: () => void
   impact: ImpactResult
-  gamme: string
+  gammeId: string
+  gammeName: string
   machineId: string
   machineName: string
   dureeMinutes: number
+  startTime: string
+  endTime: string
 }
 
 function formatDateTime(iso: string): string {
@@ -22,23 +25,23 @@ function formatDateTime(iso: string): string {
   })
 }
 
-export function ImpactModal({ open, onClose, impact, gamme, machineId, machineName, dureeMinutes }: ImpactModalProps) {
+export function ImpactModal({
+  open, onClose, impact,
+  gammeId, gammeName, machineId, machineName,
+  dureeMinutes, startTime, endTime,
+}: ImpactModalProps) {
   const [confirming, setConfirming] = useState(false)
 
   async function handleConfirm() {
     setConfirming(true)
-    const startTime = new Date()
-    startTime.setHours(new Date().getHours(), 0, 0, 0)
-    const endTime = new Date(startTime.getTime() + dureeMinutes * 60000)
-
     const res = await fetch('/api/simulateur/confirm', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         machine_id: machineId,
-        start_time: startTime.toISOString(),
-        end_time: endTime.toISOString(),
-        gamme,
+        start_time: startTime,
+        end_time: endTime,
+        gamme_id: gammeId || null,
         duree_minutes: dureeMinutes,
       }),
     })
@@ -65,34 +68,39 @@ export function ImpactModal({ open, onClose, impact, gamme, machineId, machineNa
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className={`rounded-lg p-3 text-sm ${impact.any_sla_breach ? 'bg-red-50 border border-red-200' : 'bg-slate-50 border border-slate-200'}`}>
+          {/* Summary card */}
+          <div className={`rounded-lg p-3 text-sm ${impact.any_sla_breach ? 'bg-red-50 border border-red-200' : 'bg-orange-50 border border-orange-200'}`}>
             <p className="font-semibold text-slate-800">
-              Urgence sur <span className="text-orange-600">{machineName}</span> — {dureeMinutes} min
+              {gammeName || 'SAV'} sur <span className="text-orange-600">{machineName}</span>
             </p>
-            {gamme && <p className="text-slate-600 text-xs mt-0.5">{gamme}</p>}
+            <p className="text-slate-600 text-xs mt-0.5">
+              {formatDateTime(startTime)} → {formatDateTime(endTime)} ({dureeMinutes} min)
+            </p>
           </div>
 
           {!hasAffected && (
-            <p className="text-green-700 bg-green-50 rounded p-3 text-sm font-medium">
+            <p className="text-green-700 bg-green-50 rounded-lg border border-green-200 p-3 text-sm font-medium">
               ✓ Aucun OF impacté. L&apos;urgence peut être insérée sans décalage.
             </p>
           )}
 
           {hasAffected && (
             <div className="space-y-2">
-              <p className="text-sm font-semibold text-slate-700">OFs impactés :</p>
-              <div className="max-h-48 overflow-y-auto space-y-2">
+              <p className="text-sm font-semibold text-slate-700">
+                {impact.affected_ofs.length} OF{impact.affected_ofs.length > 1 ? 's' : ''} impacté{impact.affected_ofs.length > 1 ? 's' : ''} :
+              </p>
+              <div className="max-h-52 overflow-y-auto space-y-2">
                 {impact.affected_ofs.map((of) => (
                   <div
                     key={of.of_id}
-                    className={`rounded p-2 text-sm border ${of.sla_breach ? 'bg-red-50 border-red-300' : 'bg-slate-50 border-slate-200'}`}
+                    className={`rounded-lg p-2.5 text-sm border ${of.sla_breach ? 'bg-red-50 border-red-300' : 'bg-slate-50 border-slate-200'}`}
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-semibold">{of.reference_of}</span>
                       <span className="text-slate-500 text-xs">{of.client_nom}</span>
                     </div>
                     <p className="text-xs text-slate-600 mt-0.5">
-                      Op. <strong>{of.operation_nom}</strong> — décalé de <strong>{of.shift_minutes} min</strong> — nouvelle fin : {formatDateTime(of.new_end_time)}
+                      <strong>{of.operation_nom}</strong> — décalé de <strong>+{of.shift_minutes} min</strong> — nouvelle fin : {formatDateTime(of.new_end_time)}
                     </p>
                     {of.sla_breach && (
                       <p className="text-red-600 text-xs font-semibold mt-0.5">
@@ -103,6 +111,12 @@ export function ImpactModal({ open, onClose, impact, gamme, machineId, machineNa
                 ))}
               </div>
             </div>
+          )}
+
+          {impact.any_sla_breach && (
+            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg p-2">
+              En confirmant, vous acceptez le dépassement de SLA pour les OFs indiqués ci-dessus.
+            </p>
           )}
         </div>
 
@@ -115,7 +129,7 @@ export function ImpactModal({ open, onClose, impact, gamme, machineId, machineNa
             disabled={confirming}
             className={`flex-1 h-12 font-semibold ${impact.any_sla_breach ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-orange-500 hover:bg-orange-600 text-white'}`}
           >
-            {confirming ? 'Insertion...' : impact.any_sla_breach ? 'Forcer malgré le SLA' : 'Confirmer l\'insertion'}
+            {confirming ? 'Insertion...' : impact.any_sla_breach ? '⚠ Forcer malgré le SLA' : '✓ Confirmer l\'insertion'}
           </Button>
         </div>
       </DialogContent>

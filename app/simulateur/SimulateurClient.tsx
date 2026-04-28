@@ -7,15 +7,16 @@ import { UrgencePanel } from '@/components/simulateur/UrgencePanel'
 import { usePlanning } from '@/hooks/usePlanning'
 import { useRealtimePlanning } from '@/lib/realtime/useRealtimePlanning'
 import { usePlanningStore } from '@/stores/planningStore'
-import type { Machine, UserRole } from '@/lib/types'
+import type { Gamme, Machine, UserRole } from '@/lib/types'
 
 interface SimulateurClientProps {
   machines: Machine[]
+  gammes: Gamme[]
   userName: string
   role: UserRole
 }
 
-export function SimulateurClient({ machines, userName, role }: SimulateurClientProps) {
+export function SimulateurClient({ machines, gammes, userName, role }: SimulateurClientProps) {
   const [currentDate, setCurrentDate] = useState(new Date())
 
   const dateRange = useMemo(() => {
@@ -42,7 +43,7 @@ export function SimulateurClient({ machines, userName, role }: SimulateurClientP
             onDateChange={setCurrentDate}
           />
         </div>
-        <UrgencePanel machines={machines} />
+        <UrgencePanel machines={machines} gammes={gammes} />
       </div>
     </AppShell>
   )

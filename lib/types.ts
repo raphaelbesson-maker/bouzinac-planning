@@ -53,13 +53,13 @@ export interface Gamme {
   id: string
   nom: string
   description: string | null
-  created_at: string
+  created_at?: string
   gamme_operations?: GammeOperation[]
 }
 
 export interface GammeOperation {
   id: string
-  gamme_id: string
+  gamme_id?: string
   ordre: number
   nom: string
   categorie_machine: string

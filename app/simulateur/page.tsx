@@ -12,17 +12,17 @@ export default async function SimulateurPage() {
   const reqHeaders = await headers()
   const role = (reqHeaders.get('x-user-role') as UserRole) || 'ADV'
 
-  const { data: machines } = await supabase
-    .from('machines')
-    .select('*')
-    .eq('statut', 'Actif')
-    .order('nom')
+  const [{ data: machines }, { data: gammes }] = await Promise.all([
+    supabase.from('machines').select('*').eq('statut', 'Actif').order('nom'),
+    supabase.from('gammes').select('id, nom, description, gamme_operations(id, ordre, nom, categorie_machine, duree_minutes)').order('nom'),
+  ])
 
   const userName = session.user.user_metadata?.nom ?? session.user.email ?? ''
 
   return (
     <SimulateurClient
       machines={machines ?? []}
+      gammes={gammes ?? []}
       userName={userName}
       role={role}
     />
