@@ -116,6 +116,7 @@ export async function POST(req: NextRequest) {
     inserted: upsertedOFs?.length ?? 0,
     updated: toUpsert.length - (upsertedOFs?.length ?? 0),
     ops_created: opsCreated,
+    of_ids: (upsertedOFs ?? []).map((of: { id: string }) => of.id),
     errors,
   })
 }

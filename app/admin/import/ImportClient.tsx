@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
+import { ImportAnalysisPanel } from '@/components/admin/ImportAnalysisPanel'
 
 interface RawRow {
   reference_of?: string
@@ -15,17 +16,25 @@ interface RawRow {
   [key: string]: unknown
 }
 
+interface Analysis {
+  summary: string
+  recommendations: { level: 'urgent' | 'attention' | 'info'; title: string; detail: string }[]
+}
+
 export function ImportClient() {
   const [rows, setRows] = useState<RawRow[]>([])
   const [fileName, setFileName] = useState('')
   const [importing, setImporting] = useState(false)
-  const [result, setResult] = useState<{ inserted: number; updated: number; errors: string[] } | null>(null)
+  const [result, setResult] = useState<{ inserted: number; updated: number; errors: string[]; of_ids?: string[] } | null>(null)
+  const [analysis, setAnalysis] = useState<Analysis | null>(null)
+  const [analyzing, setAnalyzing] = useState(false)
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0]
     if (!file) return
     setFileName(file.name)
     setResult(null)
+    setAnalysis(null)
 
     if (file.name.endsWith('.csv')) {
       const Papa = (await import('papaparse')).default
@@ -56,6 +65,7 @@ export function ImportClient() {
   async function handleImport() {
     if (!rows.length) return
     setImporting(true)
+    setAnalysis(null)
     const res = await fetch('/api/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -65,10 +75,35 @@ export function ImportClient() {
     setResult(data)
     if (res.ok) {
       toast.success(`Import terminé : ${data.inserted} nouveaux, ${data.updated} mis à jour.`)
+      // Trigger AI analysis if OFs were imported
+      if (data.of_ids?.length > 0) {
+        setAnalyzing(true)
+        try {
+          const aiRes = await fetch('/api/import/analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ imported_of_ids: data.of_ids }),
+          })
+          if (aiRes.ok) setAnalysis(await aiRes.json())
+        } catch { /* analysis is non-blocking */ }
+        setAnalyzing(false)
+      }
     } else {
       toast.error('Erreur lors de l\'import.')
     }
     setImporting(false)
+  }
+
+  async function handleAutoSchedule() {
+    toast.info('Planification en cours…')
+    const res = await fetch('/api/planning/auto-schedule', { method: 'POST' })
+    const data = await res.json()
+    if (res.ok) {
+      toast.success(`${data.scheduled?.length ?? 0} opération(s) planifiée(s) par l'IA.`)
+    } else {
+      toast.error(data.error ?? 'Erreur lors de la planification automatique.')
+    }
+    setAnalysis(null)
   }
 
   return (
@@ -130,7 +165,7 @@ export function ImportClient() {
         </div>
       )}
 
-      {/* Result */}
+      {/* Import result */}
       {result && (
         <div className={`rounded-lg p-4 text-sm ${result.errors.length > 0 ? 'bg-yellow-50 border border-yellow-200' : 'bg-green-50 border border-green-200'}`}>
           <p className="font-semibold">{result.inserted} OFs importés · {result.updated} mis à jour</p>
@@ -140,6 +175,22 @@ export function ImportClient() {
             </ul>
           )}
         </div>
+      )}
+
+      {/* AI Analysis */}
+      {analyzing && (
+        <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 flex items-center gap-3 text-sm text-indigo-700">
+          <span className="animate-spin">⏳</span>
+          <span>Analyse IA de l&apos;import en cours…</span>
+        </div>
+      )}
+      {analysis && (
+        <ImportAnalysisPanel
+          summary={analysis.summary}
+          recommendations={analysis.recommendations}
+          onAutoSchedule={handleAutoSchedule}
+          onDismiss={() => setAnalysis(null)}
+        />
       )}
     </div>
   )

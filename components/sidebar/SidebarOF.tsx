@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { usePlanningStore } from '@/stores/planningStore'
 import { SidebarOFCard } from './SidebarOFCard'
+import { AutoScheduleButton } from './AutoScheduleButton'
 import type { OrdreFabrication } from '@/lib/types'
 
 interface SidebarOFProps {
@@ -63,9 +64,12 @@ export function SidebarOF({ onOpenDetail }: SidebarOFProps) {
       <div className="px-3 py-3 border-b border-slate-200 bg-white space-y-2">
         <div className="flex items-center justify-between">
           <h2 className="font-bold text-slate-900 text-base">À planifier</h2>
-          <span className="text-xs text-slate-500">
-            {filtered.length}{filtered.length !== unscheduledOFs.length ? `/${unscheduledOFs.length}` : ''} OF{unscheduledOFs.length !== 1 ? 's' : ''}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500">
+              {filtered.length}{filtered.length !== unscheduledOFs.length ? `/${unscheduledOFs.length}` : ''} OF{unscheduledOFs.length !== 1 ? 's' : ''}
+            </span>
+            <AutoScheduleButton />
+          </div>
         </div>
 
         <input

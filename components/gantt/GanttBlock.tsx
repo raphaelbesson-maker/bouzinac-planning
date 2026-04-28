@@ -1,6 +1,8 @@
 'use client'
 
+import { useRef, useState } from 'react'
 import { useDraggable } from '@dnd-kit/core'
+import { toast } from 'sonner'
 import type { OFOperation, OFPriorite, OrdreFabrication } from '@/lib/types'
 import { usePlanningStore } from '@/stores/planningStore'
 
@@ -26,6 +28,7 @@ export function GanttBlock({
   onOpenDetail,
 }: GanttBlockProps) {
   const conflicts = usePlanningStore((s) => s.conflicts)
+  const { upsertOperation } = usePlanningStore()
   const opConflicts = conflicts.filter((c) => c.of_id === operation.of_id)
   const hasConflict = opConflicts.length > 0
   const isLocked = operation.locked
@@ -35,10 +38,17 @@ export function GanttBlock({
     operation.end_time != null &&
     new Date() > new Date(operation.end_time)
 
+  // Resize state
+  const resizing = useRef(false)
+  const resizeStartX = useRef(0)
+  const resizeStartWidth = useRef(0)
+  const [resizeWidth, setResizeWidth] = useState<number | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+
   const { setNodeRef, isDragging, attributes, listeners } = useDraggable({
     id: `gantt-${operation.id}`,
     data: { operation, of: of_, type: 'gantt-block' },
-    disabled: isLocked,
+    disabled: isLocked || resizing.current,
   })
 
   if (!of_) return null
@@ -46,22 +56,89 @@ export function GanttBlock({
   const startDate = new Date(operation.start_time!)
   const endDate = new Date(operation.end_time!)
   const durationMinutes = (endDate.getTime() - startDate.getTime()) / 60000
-  const width = Math.max(durationMinutes * pixelsPerMinute, 40)
+  const baseWidth = Math.max(durationMinutes * pixelsPerMinute, 40)
+  const displayWidth = resizeWidth ?? baseWidth
   const minutesFromStartHour = startDate.getHours() * 60 + startDate.getMinutes() - startHour * 60
 
   const style: React.CSSProperties = {
-    width,
+    width: displayWidth,
     left: Math.max(0, minutesFromStartHour * pixelsPerMinute),
     top: topOffset,
     position: 'absolute',
-    zIndex: 10,
+    zIndex: resizing.current ? 20 : 10,
   }
 
   const colorClass = BLOCK_COLORS[of_.priorite]
 
   function handleClick(e: React.MouseEvent) {
+    if (resizing.current) return
     e.stopPropagation()
     if (of_) onOpenDetail?.(of_, operation)
+  }
+
+  function handleResizeMouseDown(e: React.MouseEvent) {
+    if (isLocked) return
+    e.stopPropagation()
+    e.preventDefault()
+    resizing.current = true
+    resizeStartX.current = e.clientX
+    resizeStartWidth.current = displayWidth
+
+    function onMouseMove(ev: MouseEvent) {
+      const delta = ev.clientX - resizeStartX.current
+      const newWidth = Math.max(pixelsPerMinute * 15, resizeStartWidth.current + delta) // min 15 min
+      setResizeWidth(newWidth)
+    }
+
+    async function onMouseUp(ev: MouseEvent) {
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+
+      const delta = ev.clientX - resizeStartX.current
+      const newWidthPx = Math.max(pixelsPerMinute * 15, resizeStartWidth.current + delta)
+      const newDurationMinutes = Math.round(newWidthPx / pixelsPerMinute / 15) * 15 // snap to 15 min
+      const snappedWidth = newDurationMinutes * pixelsPerMinute
+
+      setResizeWidth(snappedWidth)
+      resizing.current = false
+
+      if (newDurationMinutes === Math.round(durationMinutes / 15) * 15) {
+        setResizeWidth(null)
+        return
+      }
+
+      const newEnd = new Date(startDate.getTime() + newDurationMinutes * 60000)
+      setIsSaving(true)
+      try {
+        const res = await fetch('/api/planning/move', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            operation_id: operation.id,
+            machine_id: operation.machine_id,
+            start_time: operation.start_time,
+            end_time: newEnd.toISOString(),
+          }),
+        })
+        if (!res.ok) {
+          const data = await res.json()
+          toast.error(data.error ?? 'Impossible de modifier la durée.')
+          setResizeWidth(null)
+        } else {
+          const data = await res.json()
+          upsertOperation(data.operation)
+          setResizeWidth(null)
+          toast.success(`Durée mise à jour : ${newDurationMinutes} min`)
+        }
+      } catch {
+        toast.error('Erreur réseau.')
+        setResizeWidth(null)
+      }
+      setIsSaving(false)
+    }
+
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
   }
 
   return (
@@ -69,7 +146,7 @@ export function GanttBlock({
       ref={setNodeRef}
       style={style}
       onClick={handleClick}
-      {...(isLocked ? {} : { ...listeners, ...attributes })}
+      {...(isLocked || resizing.current ? {} : { ...listeners, ...attributes })}
       className={[
         'rounded border-2 px-2 py-1 select-none overflow-hidden group',
         colorClass,
@@ -77,6 +154,7 @@ export function GanttBlock({
         isLate && !hasConflict ? 'border-orange-500 border-2' : '',
         isLocked ? 'opacity-80 cursor-pointer' : 'cursor-grab active:cursor-grabbing',
         isDragging ? 'opacity-30' : 'hover:opacity-90',
+        isSaving ? 'opacity-60' : '',
       ].join(' ')}
     >
       <div className="flex items-center gap-1">
@@ -87,10 +165,10 @@ export function GanttBlock({
           <span className="ml-auto opacity-0 group-hover:opacity-60 text-xs transition-opacity">ℹ</span>
         )}
       </div>
-      {width > 80 && (
+      {displayWidth > 80 && (
         <span className="text-xs truncate block opacity-80">{operation.nom}</span>
       )}
-      {width > 120 && (
+      {displayWidth > 120 && (
         <span className="text-xs truncate block opacity-60">{of_.client_nom}</span>
       )}
       {isLate && !hasConflict && (
@@ -106,6 +184,18 @@ export function GanttBlock({
               </p>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Resize handle — right edge, only for non-locked Planifie blocks */}
+      {!isLocked && (
+        <div
+          onMouseDown={handleResizeMouseDown}
+          onClick={(e) => e.stopPropagation()}
+          title="Étirer pour modifier la durée"
+          className="absolute right-0 top-0 bottom-0 w-2.5 cursor-ew-resize flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/10 rounded-r"
+        >
+          <div className="w-0.5 h-4 bg-current opacity-40 rounded" />
         </div>
       )}
     </div>
