@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import type { Machine, MachineStatut } from '@/lib/types'
@@ -25,6 +26,7 @@ function MachineForm({
   const [nom, setNom] = useState(machine?.nom ?? '')
   const [heures, setHeures] = useState(machine?.heures_ouverture ?? '2x8')
   const [competences, setCompetences] = useState(machine?.competences_requises.join(', ') ?? '')
+  const [statut, setStatut] = useState<MachineStatut>(machine?.statut ?? 'Actif')
   const [saving, setSaving] = useState(false)
 
   async function handleSave() {
@@ -35,6 +37,7 @@ function MachineForm({
       nom,
       heures_ouverture: heures,
       competences_requises: competences.split(',').map((c) => c.trim()).filter(Boolean),
+      statut,
     }
 
     const { error } = machine
@@ -63,6 +66,17 @@ function MachineForm({
       <div className="space-y-1">
         <label className="text-sm font-medium">Compétences requises (séparées par virgule)</label>
         <Input value={competences} onChange={(e) => setCompetences(e.target.value)} className="h-12" placeholder="ex : tournage, cnc" />
+      </div>
+      <div className="space-y-1">
+        <label className="text-sm font-medium">Statut</label>
+        <select
+          value={statut}
+          onChange={(e) => setStatut(e.target.value as MachineStatut)}
+          className="w-full h-12 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900"
+        >
+          <option value="Actif">Actif</option>
+          <option value="Maintenance">En maintenance</option>
+        </select>
       </div>
       <div className="flex gap-3 pt-2">
         <Button variant="outline" onClick={onClose} className="flex-1 h-12">Annuler</Button>

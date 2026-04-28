@@ -7,7 +7,7 @@ const ALLOWED_OP_TRANSITIONS: Record<string, string[]> = {
   A_planifier: ['Planifie'],
   Planifie:    ['En_cours', 'A_planifier'],
   En_cours:    ['Termine'],
-  Termine:     [],
+  Termine:     ['A_planifier'],
 }
 
 export async function POST(req: NextRequest) {
@@ -22,7 +22,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'operation_id et statut sont requis' }, { status: 400 })
   }
 
-  // Fetch current operation
   const { data: op, error: fetchErr } = await supabase
     .from('of_operations')
     .select('*')
@@ -31,7 +30,6 @@ export async function POST(req: NextRequest) {
 
   if (fetchErr || !op) return NextResponse.json({ error: 'Opération introuvable' }, { status: 404 })
 
-  // Validate transition
   const allowed = ALLOWED_OP_TRANSITIONS[op.statut] ?? []
   if (!allowed.includes(statut)) {
     return NextResponse.json(
@@ -40,8 +38,24 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // Update operation
   const locked = statut === 'En_cours'
+
+  // Réouvrir (Terminé → A_planifier) : reset this op + all subsequent ones
+  if (statut === 'A_planifier') {
+    await supabase
+      .from('of_operations')
+      .update({ statut: 'A_planifier', locked: false, machine_id: null, start_time: null, end_time: null })
+      .eq('of_id', op.of_id)
+      .gte('ordre', op.ordre)
+
+    await supabase
+      .from('ordres_fabrication')
+      .update({ statut: 'A_planifier' })
+      .eq('id', op.of_id)
+
+    return NextResponse.json({ operation: { ...op, statut: 'A_planifier', locked: false }, of_statut: 'A_planifier' })
+  }
+
   const { data: updatedOp, error: updateErr } = await supabase
     .from('of_operations')
     .update({ statut, locked })

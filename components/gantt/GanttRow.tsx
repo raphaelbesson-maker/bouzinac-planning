@@ -1,7 +1,8 @@
 'use client'
 
-import { useDroppable } from '@dnd-kit/core'
+import { useDroppable, useDndContext } from '@dnd-kit/core'
 import type { Machine, OFOperation, OrdreFabrication } from '@/lib/types'
+import { getNextOperation } from '@/lib/planning/of-utils'
 import { GanttBlock } from './GanttBlock'
 
 interface GanttRowProps {
@@ -10,6 +11,7 @@ interface GanttRowProps {
   pixelsPerMinute: number
   totalMinutes: number
   startHour: number
+  nowLeft?: number | null
   onOpenDetail?: (of: OrdreFabrication, op: OFOperation) => void
 }
 
@@ -21,15 +23,30 @@ export function GanttRow({
   pixelsPerMinute,
   totalMinutes,
   startHour,
+  nowLeft,
   onOpenDetail,
 }: GanttRowProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: `machine-${machine.id}`,
     data: { machineId: machine.id, machineCategorie: machine.categorie },
-    disabled: machine.statut === 'Maintenance',
   })
 
+  const { active } = useDndContext()
+  const draggedOf = active?.data.current?.of as OrdreFabrication | undefined
+  const isDragging = !!active
+
   const isMaintenance = machine.statut === 'Maintenance'
+  const draggingCategorie = draggedOf ? (getNextOperation(draggedOf)?.categorie_machine ?? null) : null
+  const categoryMatch = !draggingCategorie || draggingCategorie === machine.categorie
+  const canReceive = !isMaintenance && categoryMatch
+
+  let dropZoneBg = isMaintenance ? 'bg-slate-100 bg-opacity-60' : 'bg-white'
+  if (isDragging && !isMaintenance) {
+    dropZoneBg = canReceive ? 'bg-green-50' : 'bg-red-50 opacity-60'
+  }
+  if (isOver) {
+    dropZoneBg = canReceive ? 'bg-blue-100' : 'bg-red-100'
+  }
 
   return (
     <div className="flex border-b border-slate-200">
@@ -37,7 +54,7 @@ export function GanttRow({
         <div>
           <p className="text-sm font-semibold text-slate-800 leading-tight">{machine.nom}</p>
           <p className={`text-xs ${isMaintenance ? 'text-red-500' : 'text-slate-500'}`}>
-            {isMaintenance ? 'Maintenance' : machine.heures_ouverture}
+            {isMaintenance ? '🔧 Maintenance' : machine.heures_ouverture}
           </p>
           {machine.categorie && !isMaintenance && (
             <p className="text-xs text-slate-400 italic">{machine.categorie}</p>
@@ -47,11 +64,7 @@ export function GanttRow({
 
       <div
         ref={setNodeRef}
-        className={[
-          'relative flex-1 h-16',
-          isOver && !isMaintenance ? 'bg-blue-50' : '',
-          isMaintenance ? 'bg-slate-100 bg-opacity-60' : 'bg-white',
-        ].join(' ')}
+        className={['relative flex-1 h-16 transition-colors duration-150', dropZoneBg].join(' ')}
         style={{ minWidth: totalMinutes * pixelsPerMinute }}
       >
         {Array.from({ length: Math.ceil(totalMinutes / 60) }, (_, i) => (
@@ -76,6 +89,32 @@ export function GanttRow({
         {isMaintenance && (
           <div className="absolute inset-0 flex items-center justify-center">
             <span className="text-xs text-slate-400 italic">Machine en maintenance</span>
+          </div>
+        )}
+
+        {nowLeft !== null && nowLeft !== undefined && (
+          <div
+            className="absolute top-0 bottom-0 z-20 pointer-events-none"
+            style={{ left: nowLeft }}
+          >
+            <div className="w-0.5 h-full bg-red-500 opacity-80" />
+            <div className="absolute -top-1 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-red-500" />
+          </div>
+        )}
+
+        {isDragging && isOver && !canReceive && !isMaintenance && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <span className="text-xs font-semibold text-red-600 bg-red-50 px-2 py-1 rounded border border-red-200">
+              Catégorie incompatible ({draggingCategorie} ≠ {machine.categorie})
+            </span>
+          </div>
+        )}
+
+        {isDragging && isOver && isMaintenance && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <span className="text-xs font-semibold text-red-600 bg-red-50 px-2 py-1 rounded border border-red-200">
+              Machine en maintenance
+            </span>
           </div>
         )}
       </div>

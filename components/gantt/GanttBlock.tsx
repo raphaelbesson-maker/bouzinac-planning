@@ -26,11 +26,15 @@ export function GanttBlock({
   onOpenDetail,
 }: GanttBlockProps) {
   const conflicts = usePlanningStore((s) => s.conflicts)
-  const hasConflict = conflicts.some((c) => c.of_id === operation.of_id)
+  const opConflicts = conflicts.filter((c) => c.of_id === operation.of_id)
+  const hasConflict = opConflicts.length > 0
   const isLocked = operation.locked
   const of_ = operation.of
+  const isLate =
+    operation.statut !== 'Termine' &&
+    operation.end_time != null &&
+    new Date() > new Date(operation.end_time)
 
-  // Operations on the Gantt are not re-draggable — unschedule via modal
   const { setNodeRef } = useDraggable({
     id: operation.id,
     data: { operation },
@@ -69,11 +73,13 @@ export function GanttBlock({
         'rounded border-2 px-2 py-1 select-none overflow-hidden group cursor-pointer hover:opacity-90',
         colorClass,
         hasConflict ? 'animate-pulse border-red-600 border-2' : '',
+        isLate && !hasConflict ? 'border-orange-500 border-2' : '',
         isLocked ? 'opacity-80' : '',
       ].join(' ')}
     >
       <div className="flex items-center gap-1">
         {isLocked && <span title="En cours — verrouillé">🔒</span>}
+        {isLate && <span title="En retard sur le planning">⏱</span>}
         <span className="font-semibold text-xs truncate">{of_.reference_of}</span>
         {onOpenDetail && (
           <span className="ml-auto opacity-0 group-hover:opacity-60 text-xs transition-opacity">ℹ</span>
@@ -85,8 +91,20 @@ export function GanttBlock({
       {width > 120 && (
         <span className="text-xs truncate block opacity-60">{of_.client_nom}</span>
       )}
+      {isLate && !hasConflict && (
+        <span className="text-orange-700 text-xs font-semibold">⏱ En retard</span>
+      )}
       {hasConflict && (
-        <span className="text-red-600 text-xs font-bold">⚠ Conflit</span>
+        <div className="relative group/conflict">
+          <span className="text-red-600 text-xs font-bold cursor-help">⚠ Conflit</span>
+          <div className="absolute bottom-full left-0 mb-1 hidden group-hover/conflict:block bg-slate-900 text-white text-xs rounded-md p-2 w-56 z-50 shadow-xl pointer-events-none">
+            {opConflicts.map((c, i) => (
+              <p key={i} className={i > 0 ? 'mt-1 pt-1 border-t border-slate-700' : ''}>
+                {c.message}
+              </p>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   )

@@ -243,6 +243,17 @@ export function OFDetailModal({ of: of_, operation, open, onClose }: OFDetailMod
                 ✓ Marquer Terminé
               </Button>
             )}
+
+            {operation.statut === 'Termine' && (
+              <Button
+                variant="outline"
+                className="w-full justify-start text-slate-600 border-slate-300 hover:bg-slate-50"
+                disabled={loading}
+                onClick={() => handleStatusChange('A_planifier')}
+              >
+                ↩ Réouvrir (remet À planifier)
+              </Button>
+            )}
           </div>
         )}
 

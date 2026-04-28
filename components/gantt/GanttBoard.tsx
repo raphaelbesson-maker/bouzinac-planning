@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { Machine, OFOperation, OrdreFabrication } from '@/lib/types'
 import { GanttRow } from './GanttRow'
 import { GanttHeader } from './GanttHeader'
@@ -29,8 +29,20 @@ export function GanttBoard({
   onOpenDetail,
 }: GanttBoardProps) {
   const [viewType, setViewType] = useState<ViewType>('day')
+  const [now, setNow] = useState(new Date())
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60000)
+    return () => clearInterval(id)
+  }, [])
 
   const totalMinutes = (END_HOUR - START_HOUR) * 60
+
+  const isToday = currentDate.toDateString() === now.toDateString()
+  const nowMinutesFromStart = now.getHours() * 60 + now.getMinutes() - START_HOUR * 60
+  const nowLeft = isToday && nowMinutesFromStart >= 0 && nowMinutesFromStart <= totalMinutes
+    ? nowMinutesFromStart * PIXELS_PER_MINUTE
+    : null
 
   function getOpsForMachine(machineId: string): OFOperation[] {
     return operations.filter((op) => {
@@ -56,7 +68,7 @@ export function GanttBoard({
 
       {viewType === 'day' && (
         <div className="flex-1 overflow-auto">
-          <div className="min-w-max">
+          <div className="min-w-max relative">
             <GanttHeader
               date={currentDate}
               startHour={START_HOUR}
@@ -71,6 +83,7 @@ export function GanttBoard({
                 pixelsPerMinute={PIXELS_PER_MINUTE}
                 totalMinutes={totalMinutes}
                 startHour={START_HOUR}
+                nowLeft={nowLeft}
                 onOpenDetail={onOpenDetail}
               />
             ))}

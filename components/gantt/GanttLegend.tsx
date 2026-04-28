@@ -22,6 +22,14 @@ export function GanttLegend() {
         <span>🔒</span>
         <span className="text-slate-600">En cours (verrouillé)</span>
       </div>
+      <div className="flex items-center gap-1.5">
+        <span className="w-4 h-4 rounded border-2 border-orange-500 bg-slate-200 inline-block" />
+        <span className="text-slate-600">⏱ En retard</span>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <div className="w-0.5 h-4 bg-red-500 inline-block" />
+        <span className="text-slate-600">Maintenant</span>
+      </div>
     </div>
   )
 }

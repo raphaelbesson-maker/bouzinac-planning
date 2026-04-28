@@ -13,10 +13,67 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Paramètres manquants' }, { status: 400 })
   }
 
+  // Load business rules
+  const { data: rules } = await supabase
+    .from('reglements')
+    .select('key, value')
+    .in('key', ['never_delay_premium', 'max_urgence_per_day'])
+
+  const rulesMap = Object.fromEntries((rules ?? []).map((r) => [r.key, r.value]))
+  const neverDelayPremium = String(rulesMap.never_delay_premium) === 'true'
+  const maxUrgencePerDay = Number(rulesMap.max_urgence_per_day ?? 99)
+
+  // Rule 1: max urgences SAV par jour
+  if (maxUrgencePerDay > 0) {
+    const today = new Date().toISOString().split('T')[0]
+    const { count } = await supabase
+      .from('ordres_fabrication')
+      .select('id', { count: 'exact', head: true })
+      .like('reference_of', 'SAV-%')
+      .gte('created_at', today + 'T00:00:00.000Z')
+      .lte('created_at', today + 'T23:59:59.999Z')
+
+    if ((count ?? 0) >= maxUrgencePerDay) {
+      return NextResponse.json(
+        { error: `Limite atteinte : ${maxUrgencePerDay} urgence(s) SAV maximum par jour (règle Admin).` },
+        { status: 403 }
+      )
+    }
+  }
+
+  // Rule 2: never delay premium clients
+  if (neverDelayPremium) {
+    const { data: opsAfter } = await supabase
+      .from('of_operations')
+      .select('of_id, of:ordres_fabrication(client_id)')
+      .eq('machine_id', machine_id)
+      .gte('start_time', start_time)
+      .not('start_time', 'is', null)
+
+    const clientIds = (opsAfter ?? [])
+      .map((o) => (o.of as { client_id?: string } | null)?.client_id)
+      .filter(Boolean) as string[]
+
+    if (clientIds.length > 0) {
+      const { data: premiumClients } = await supabase
+        .from('clients')
+        .select('id, nom')
+        .in('id', clientIds)
+        .eq('is_premium', true)
+
+      if (premiumClients && premiumClients.length > 0) {
+        const names = premiumClients.map((c) => c.nom).join(', ')
+        return NextResponse.json(
+          { error: `Insertion bloquée : le client Premium "${names}" serait décalé. Désactivez la règle "Ne jamais décaler Premium" pour forcer.` },
+          { status: 403 }
+        )
+      }
+    }
+  }
+
   const ref = `SAV-${Date.now()}`
   const slaDate = new Date(end_time).toISOString().split('T')[0]
 
-  // Create the urgence OF
   const { data: of_, error: ofError } = await supabase
     .from('ordres_fabrication')
     .insert({
@@ -33,7 +90,6 @@ export async function POST(req: NextRequest) {
 
   if (ofError) return NextResponse.json({ error: ofError.message }, { status: 500 })
 
-  // If a gamme is provided, use its first operation; otherwise create a single "SAV" operation
   let opName = 'SAV'
   let categorieMachine = 'General'
 
@@ -51,7 +107,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Create a single scheduled operation
   const { data: op, error: opError } = await supabase
     .from('of_operations')
     .insert({
@@ -69,7 +124,6 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (opError) {
-    // Rollback OF
     await supabase.from('ordres_fabrication').delete().eq('id', of_.id)
     if (opError.code === '23P01') {
       return NextResponse.json(

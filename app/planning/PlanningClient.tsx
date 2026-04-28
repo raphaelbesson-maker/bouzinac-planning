@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -12,6 +12,7 @@ import {
   useSensors,
 } from '@dnd-kit/core'
 import { toast } from 'sonner'
+import { createClient } from '@/lib/supabase/client'
 import { AppShell } from '@/components/shared/AppShell'
 import { GanttBoard } from '@/components/gantt/GanttBoard'
 import { SidebarOF } from '@/components/sidebar/SidebarOF'
@@ -20,7 +21,7 @@ import { OFDetailModal } from '@/components/gantt/OFDetailModal'
 import { usePlanning } from '@/hooks/usePlanning'
 import { useRealtimePlanning } from '@/lib/realtime/useRealtimePlanning'
 import { usePlanningStore } from '@/stores/planningStore'
-import { getNextOperation } from '@/components/sidebar/SidebarOFCard'
+import { getNextOperation } from '@/lib/planning/of-utils'
 import type { Machine, OFOperation, OrdreFabrication, UserRole } from '@/lib/types'
 
 const START_HOUR = 6
@@ -32,11 +33,33 @@ interface PlanningClientProps {
   role: UserRole
 }
 
-export function PlanningClient({ machines, userName, role }: PlanningClientProps) {
+export function PlanningClient({ machines: initialMachines, userName, role }: PlanningClientProps) {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [activeOf, setActiveOf] = useState<OrdreFabrication | null>(null)
   const [detailOf, setDetailOf] = useState<OrdreFabrication | null>(null)
   const [detailOp, setDetailOp] = useState<OFOperation | null>(null)
+  const [machines, setMachines] = useState<Machine[]>(initialMachines)
+
+  useEffect(() => {
+    const supabase = createClient()
+    const channel = supabase
+      .channel('machines-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'machines' }, (payload) => {
+        if (payload.eventType === 'DELETE') {
+          setMachines((prev) => prev.filter((m) => m.id !== (payload.old as Machine).id))
+        } else {
+          const updated = payload.new as Machine
+          setMachines((prev) => {
+            const exists = prev.some((m) => m.id === updated.id)
+            return exists
+              ? prev.map((m) => (m.id === updated.id ? updated : m))
+              : [...prev, updated].sort((a, b) => a.nom.localeCompare(b.nom))
+          })
+        }
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [])
 
   const dateRange = useMemo(() => {
     const start = new Date()
@@ -85,11 +108,15 @@ export function PlanningClient({ machines, userName, role }: PlanningClientProps
       return
     }
 
-    // Check machine categorie compatibility
+    // Check machine availability and categorie compatibility
     const targetMachine = machines.find((m) => m.id === droppedOnMachineId)
+    if (targetMachine?.statut === 'Maintenance') {
+      toast.error(`${targetMachine.nom} est en maintenance. Choisissez une autre machine.`)
+      return
+    }
     if (targetMachine?.categorie && targetMachine.categorie !== nextOp.categorie_machine) {
       toast.error(
-        `Cette machine (${targetMachine.nom}) fait du "${targetMachine.categorie}", mais la prochaine opération requiert "${nextOp.categorie_machine}".`
+        `${targetMachine?.nom} est une machine de "${targetMachine.categorie}", mais "${nextOp.nom}" requiert une machine de "${nextOp.categorie_machine}".`
       )
       return
     }

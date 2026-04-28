@@ -3,10 +3,14 @@
 import { useDraggable } from '@dnd-kit/core'
 import type { OFOperation, OrdreFabrication } from '@/lib/types'
 import { PrioriteBadge } from '@/components/shared/StatusBadge'
+import { getNextOperation } from '@/lib/planning/of-utils'
+
+export { getNextOperation }
 
 interface SidebarOFCardProps {
   of: OrdreFabrication
   onOpenDetail: (of: OrdreFabrication) => void
+  alertDays?: number
 }
 
 function daysUntil(dateStr: string): number {
@@ -16,16 +20,10 @@ function daysUntil(dateStr: string): number {
   return Math.ceil((target.getTime() - now.getTime()) / 86400000)
 }
 
-export function getNextOperation(of: OrdreFabrication): OFOperation | undefined {
-  const ops = of.of_operations ?? []
-  return ops
-    .filter((op) => op.statut === 'A_planifier')
-    .sort((a, b) => a.ordre - b.ordre)[0]
-}
 
-export function OFCardContent({ of }: { of: OrdreFabrication }) {
+export function OFCardContent({ of, alertDays = 2 }: { of: OrdreFabrication; alertDays?: number }) {
   const days = daysUntil(of.sla_date)
-  const slaUrgent = days <= 2
+  const slaUrgent = days <= alertDays
   const nextOp = getNextOperation(of)
 
   return (
@@ -68,7 +66,7 @@ function cardClass(of: OrdreFabrication) {
   ].join(' ')
 }
 
-export function SidebarOFCard({ of, onOpenDetail }: SidebarOFCardProps) {
+export function SidebarOFCard({ of, onOpenDetail, alertDays = 2 }: SidebarOFCardProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: of.id,
     data: { of },
@@ -86,7 +84,7 @@ export function SidebarOFCard({ of, onOpenDetail }: SidebarOFCardProps) {
         isDragging ? 'opacity-30' : 'shadow-sm hover:shadow-md',
       ].join(' ')}
     >
-      <OFCardContent of={of} />
+      <OFCardContent of={of} alertDays={alertDays} />
       <p className="text-xs text-slate-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
         Glisser sur une machine pour planifier
       </p>
